@@ -5,8 +5,8 @@
  * @format
  */
 
-import React, { useEffect } from 'react';
-import {Camera, useCameraDevice, useCameraPermission} from 'react-native-vision-camera';
+import React, { useEffect, useState } from 'react';
+import {Camera, useCameraDevice, useCameraPermission, VisionCameraProxy, Frame, useFrameProcessor, VideoFormat, CameraProps } from 'react-native-vision-camera';
 import type {PropsWithChildren} from 'react';
 import {
   SafeAreaView,
@@ -29,6 +29,16 @@ import {
 type SectionProps = PropsWithChildren<{
   title: string;
 }>;
+
+const plugin = VisionCameraProxy.initFrameProcessorPlugin('hand_landmarks', {});
+
+export function hand_landmarks(frame: Frame) {
+    'worklet';
+    if(plugin == null){
+        throw new Error('Failed to load Frame Processor Plugin! 1.0');
+    }
+    return plugin.call(frame);
+}
 
 function Section({children, title}: SectionProps): React.JSX.Element {
   const isDarkMode = useColorScheme() === 'dark';
@@ -66,9 +76,29 @@ function App(): React.JSX.Element {
   const device = useCameraDevice('front');
   const {hasPermission, requestPermission} = useCameraPermission();
 
+
   useEffect(() => {
       requestPermission();
   }, [requestPermission]);
+
+  const frameProcessor = useFrameProcessor(frame => {
+      'worklet';
+      const data = hand_landmarks(frame);
+      console.log(data);
+      }, []);
+
+  const [format, setFormat] = useState<VideoFormat | null>(null);
+  useEffect(() =>{
+      if (device) {
+          const availableFormats = device.formats;
+          const selectedFormat = availableFormats[0];
+          setFormat(selectedFormat);
+          }
+      }, [device]);
+
+      if (device == null || format == null) return <Text>Loading camera...</Text>;
+
+
 
   if (!hasPermission) {
       return <Text>No permission</Text>;
@@ -79,7 +109,7 @@ function App(): React.JSX.Element {
   }
 
   return (
-    <Camera style={StyleSheet.absoluteFill} device={device} isActive={true} />
+    <Camera style={StyleSheet.absoluteFill} device={device} isActive={true} frameProcessor={frameProcessor} fps={30} pixelFormat="rgb" format={format}/>
   );
 }
 
